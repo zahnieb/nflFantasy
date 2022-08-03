@@ -1,3 +1,5 @@
+#Fantasy players data retrieval and sorting from fantasydata.com
+
 import requests
 import json
 
