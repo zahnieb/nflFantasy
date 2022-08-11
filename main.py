@@ -1,10 +1,55 @@
 #Fantasy players data retrieval and sorting from fantasydata.com
+from __future__ import print_function
+import os
+from dotenv import load_dotenv
 from tokenize import Double
 import requests
 import json
+import flask
 from flask import Flask
+from flask_session import Session
+#google API imports
+from google.auth.transport.requests import Request
+import google.oauth2.credentials
+import google_auth_oauthlib.flow
+import googleapiclient.discovery
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+
 
 app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET')
+
+
+
+SPORTSDATA_KEY = os.getenv('SPORTSDATA_KEY')
+#google sheet api constants
+SHEETS_KEY = os.getenv('SHEET_KEY')
+SHEETS_ID = os.getenv('SHEET_ID')
+SHEETS_SECRET = os.getenv('SHEET_SECRET')
+SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
+API_SERVICE_NAME = 'drive'
+API_VERSION = 'v2'
+CLIENT_SECRETS_FILE = 'client_secret.json'
+
+def get_values(spreadsheet_id, range_name):
+    #load pre-authorized credentials from environment.
+    creds, _ = google.auth.default()
+    try:
+        service = build('sheets', 'v4', credentials = creds)
+        spreadsheetID = spreadsheet_id
+        range = range_name
+
+        result = service.spreadsheets().values().get(
+            spreadsheetID, range).execute()
+        rows = result.get('values', [])
+        print(f"{len(rows)} rows retreived")
+        return result
+    except HttpError as error:
+        print(f"An error has occurred: {error}")
+        return error
+        
 
 @app.route("/")
 def hello_world():
@@ -12,23 +57,14 @@ def hello_world():
     
 @app.route("/top100")
 def player():
-    with open('keys.json') as file:
-        data = json.load(file)
-    key = data['key']
-
     headers = {
-        'Ocp-Apim-Subscription-Key': f'{key}'
+        'Ocp-Apim-Subscription-Key': f'{SPORTSDATA_KEY}'
     }
 
-    season = 2022
-    playerid = 18890
-
-    playerURL = f'https://api.sportsdata.io/v3/nfl/projections/json/PlayerSeasonProjectionStatsByPlayerID/{season}/{playerid}'
     playersListURL = f'https://api.sportsdata.io/v3/nfl/scores/json/Players'
-    #request to api 
-    r = requests.get(playerURL, headers = headers)
+    
+    #request to api
     requestPlayer = requests.get(playersListURL, headers = headers)
-    #json_data = r.json() if r and r.status_code == 200 else None
     json_dataPlayer = requestPlayer.json()
     data = json_dataPlayer
     name = ''
@@ -46,16 +82,138 @@ def player():
 
     return playerData
         
-    ##08/08/2022 create oauth with goggle to READ data from google spreadsheet
-    ##make route/auth that accepts a query parameter of google that will try 
-    # to authenticate with google
-    #Exame route: http://localhost:3000/auth?google%60
+    ##08/08/2022 create oauth with goggle to WRITE data from sportsdata.io api
+    #
+
+@app.route('/sheet')
+def sheet():
+    FANTASY_SHEET_ID = "1zY3RcNQFPV2W96XczA2_W2uqQKSSYsAm_ctywPKA8Bw"
+    range = "A1:B2"
+    creds = None
+
+    if 'credentials' not in flask.session:
+        return flask.redirect('authorize')
+    
+    #load credentials from session.
+    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
+
+    drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
+
+    files = drive.files().list().execute()
+
+    #save creds back to session in case access token refreshed.
+    
+    flask.session['credentials'] = credentials_to_dict(credentials)
+
+    #return flask.jsonify(**files)
+    return get_values(FANTASY_SHEET_ID, range)
+    
+
+@app.route('/authorize')
+def authorize():
+    #flow to manage oauth2.0 authorization grant steps.
+    env = load_dotenv()
+    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(CLIENT_SECRETS_FILE,
+     scopes = SCOPES)
+
+    #URI must match authorized redirect URIs for oauth 2.0 client configured in API console.
+    flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
+
+    authorization_url, state = flow.authorization_url(
+        #enable offline access to refresh token w/o re-prompting user perms.
+        access_type = 'offline',
+        #enable incremental authorization. recommended best practice.
+        include_granted_scopes='true')
+
+    flask.session['state'] = state
+
+    return flask.redirect(authorization_url)
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    #specify state when creating flow in callback to verify the authorization server response
+    state = flask.session['state']
+
+    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes = SCOPES,
+     state = state)
+    flow.redirect_uri = flask.url_for('oauth2callback', _external=True)
+
+    #use authorization server's response to fetch oauth 2.0 tokens.
+    authorization_response = flask.request.url
+    flow.fetch_token(authorization_response=authorization_response)
+
+    #store credentials in session.
+    credentials = flow.credentials
+    flask.session['credentials'] = credentials_to_dict(credentials)
+
+    return flask.redirect(flask.url_for('sheet'))
+
+@app.route('/revoke')
+def revoke():
+    if 'credentials' not in flask.session:
+        return ('You need to <a href="/authorize">authorize</a> before ' +
+        'testing the code to revoke credentials.')
+    
+    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
+
+    revoke = requests.port('https://oauth2.googleapis.com/revoke',
+      params={'token': credentials.token},
+      headers = {'content-type': 'application/x-www-form-urlencoded'})
+
+    status_code = getattr(revoke, 'status_code')
+    if status_code == 200:
+        return('Credentials successfully revoked.' + print_index_table())
+    else:
+        return('An error occurred.' + print_index_table())
+
+@app.route('/clear')
+def clear_credentials():
+    if 'credentials' in flask.session:
+        del flask.session['credentials']
+    return ('Credentials have been cleard.<br><br>' + print_index_table())
+
+def credentials_to_dict(credentials):
+    return {'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes}
+
+def print_index_table():
+    return ('<table>' +
+          '<tr><td><a href="/test">Test an API request</a></td>' +
+          '<td>Submit an API request and see a formatted JSON response. ' +
+          '    Go through the authorization flow if there are no stored ' +
+          '    credentials for the user.</td></tr>' +
+          '<tr><td><a href="/authorize">Test the auth flow directly</a></td>' +
+          '<td>Go directly to the authorization flow. If there are stored ' +
+          '    credentials, you still might not be prompted to reauthorize ' +
+          '    the application.</td></tr>' +
+          '<tr><td><a href="/revoke">Revoke current credentials</a></td>' +
+          '<td>Revoke the access token associated with the current user ' +
+          '    session. After revoking credentials, if you go to the test ' +
+          '    page, you should see an <code>invalid_grant</code> error.' +
+          '</td></tr>' +
+          '<tr><td><a href="/clear">Clear Flask session credentials</a></td>' +
+          '<td>Clear the access token currently stored in the user session. ' +
+          '    After clearing the token, if you <a href="/test">test the ' +
+          '    API request</a> again, you should go back to the auth flow.' +
+          '</td></tr></table>')
+
+if __name__ == '__main__':
+    # When running locally, disable OAuthlib's HTTPS verification.
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
+    # Specify a hostname and port that are set as a valid redirect URI
+    # for your API project in the Google API Console.
+    app.run('localhost', 8080, debug=True)
 
 
-@app.route('/spreadsheet')
-def googleSheet():
 
-    test = "hello"
-    return test
+    
+
+    
+
  
  
