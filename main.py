@@ -1,5 +1,7 @@
 #Fantasy players data retrieval and sorting from fantasydata.com
 from __future__ import print_function
+from distutils.log import error
+from email import header
 import os
 from dotenv import load_dotenv
 from tokenize import Double
@@ -32,24 +34,6 @@ SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
 API_SERVICE_NAME = 'drive'
 API_VERSION = 'v2'
 CLIENT_SECRETS_FILE = 'client_secret.json'
-
-def get_values(spreadsheet_id, range_name):
-    #load pre-authorized credentials from environment.
-    creds, _ = google.auth.default()
-    try:
-        service = build('sheets', 'v4', credentials = creds)
-        spreadsheetID = spreadsheet_id
-        range = range_name
-
-        result = service.spreadsheets().values().get(
-            spreadsheetID, range).execute()
-        rows = result.get('values', [])
-        print(f"{len(rows)} rows retreived")
-        return result
-    except HttpError as error:
-        print(f"An error has occurred: {error}")
-        return error
-        
 
 @app.route("/")
 def hello_world():
@@ -84,30 +68,6 @@ def player():
         
     ##08/08/2022 create oauth with goggle to WRITE data from sportsdata.io api
     #
-
-@app.route('/sheet')
-def sheet():
-    FANTASY_SHEET_ID = "1zY3RcNQFPV2W96XczA2_W2uqQKSSYsAm_ctywPKA8Bw"
-    range = "A1:B2"
-    creds = None
-
-    if 'credentials' not in flask.session:
-        return flask.redirect('authorize')
-    
-    #load credentials from session.
-    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
-
-    drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
-
-    files = drive.files().list().execute()
-
-    #save creds back to session in case access token refreshed.
-    
-    flask.session['credentials'] = credentials_to_dict(credentials)
-
-    #return flask.jsonify(**files)
-    return get_values(FANTASY_SHEET_ID, range)
-    
 
 @app.route('/authorize')
 def authorize():
@@ -178,7 +138,8 @@ def credentials_to_dict(credentials):
             'token_uri': credentials.token_uri,
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes}
+            'scopes': credentials.scopes
+            }
 
 def print_index_table():
     return ('<table>' +
@@ -201,6 +162,57 @@ def print_index_table():
           '    API request</a> again, you should go back to the auth flow.' +
           '</td></tr></table>')
 
+@app.route('/sheet')
+def sheet():
+    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
+    range = "Sheet1!A1:B2"
+    creds = None
+
+    if 'credentials' not in flask.session:
+        return flask.redirect('authorize')
+    
+    #load credentials from session.
+    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
+
+    drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
+
+    #files = drive.files().list().execute()
+
+    #save creds back to session in case access token refreshed.
+    flask.session['credentials'] = credentials_to_dict(credentials)
+
+    #return google sheet values from range
+    return get_values(FANTASY_SHEET_ID, range)
+
+@app.route('/write')
+def write():
+    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
+    range = "A3:B4"
+    enterType = "USER_ENTERED"
+    input_values = [['A','B'],['C','D']]
+    creds = None
+
+    #authorize if credentials not in session
+    if 'credentials' not in flask.session:
+        return flask.redirect('authorization')
+
+    #load credentials from session
+    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
+
+    drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
+    
+    #save creds back to session
+    flask.session['credentials'] = credentials_to_dict(credentials)
+
+    return update_values(FANTASY_SHEET_ID, range, enterType, input_values)
+    
+    # if update.get('updatedCells') == None:
+    #     return '<p>Unsuccessful Update</p>'
+    # elif update == error:
+    #     return error
+    # else:
+    #     return update.get('updatedCells') + '<p>Successfully Updated</p>'
+
 if __name__ == '__main__':
     # When running locally, disable OAuthlib's HTTPS verification.
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -209,10 +221,41 @@ if __name__ == '__main__':
     # for your API project in the Google API Console.
     app.run('localhost', 8080, debug=True)
 
+def get_values(spreadsheet_id, range_name):
+    #load pre-authorized credentials from environment.
+    creds, _ = google.auth.default()
 
+    try:
+        service = build('sheets', 'v4', credentials = creds)
 
-    
+        result = service.spreadsheets().values().get(
+            spreadsheetId = spreadsheet_id, range = range_name).execute()
+        rows = result.get('values', [])
+        print(f"{len(rows)} rows retreived")
+        return result
+    except HttpError as error:
+        print(f"An error has occurred: {error}")
+        return error
 
+def update_values(spreadsheet_id, range_name, value_input_option, _values):
+    #loads pre-authorized user creds from environment
+    #creates batch_updates user has access to
+    creds, _ = google.auth.default()
+
+    try:
+        service = build('sheets', 'v4', credentials = creds)
+        values = _values
+        body = {
+            'values':values
+        }
+        result = service.spreadsheets().values().update(
+            spreadsheetId = spreadsheet_id, range = range_name,
+            valueInputOption = value_input_option, body = body).execute()
+        print(f"{result.get('updatedCells')} cells updated.")
+        return result
+    except HttpError as error:
+        print(f'An error occurred: {error}')
+        return error
     
 
  
