@@ -38,7 +38,7 @@ CLIENT_SECRETS_FILE = 'client_secret.json'
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"
-    
+
 @app.route("/top100")
 def player():
     headers = {
@@ -51,21 +51,62 @@ def player():
     requestPlayer = requests.get(playersListURL, headers = headers)
     json_dataPlayer = requestPlayer.json()
     data = json_dataPlayer
-    name = ''
-    averageDraftPos = ''
-    playerData = ''
+    playerData = []
 
     #return data of top 100 avg draft position player, NOT sorted/formatted
     for data in json_dataPlayer:
         tempDraft = data['AverageDraftPosition']
         if tempDraft == None or int(tempDraft) > 100:
             continue
-        name = data['Name']
-        averageDraftPos = data['AverageDraftPosition']
-        playerData = f'{name} {averageDraftPos}' + playerData
+        arrResult = [data['Name'],data['AverageDraftPosition']]
+        #name = data['Name']
+        #averageDraftPos = data['AverageDraftPosition']
+        playerData.append(arrResult)
+
+    #sort by lowest -> highest average draft position
+    playerData.sort(key = lambda x: x[1])
 
     return playerData
-        
+
+@app.route("/top100toSheet")
+def playerSheet():
+    headers = {
+        'Ocp-Apim-Subscription-Key': f'{SPORTSDATA_KEY}'
+    }
+
+    playersListURL = f'https://api.sportsdata.io/v3/nfl/scores/json/Players'
+    
+    #request to api
+    requestPlayer = requests.get(playersListURL, headers = headers)
+    json_dataPlayer = requestPlayer.json()
+    data = json_dataPlayer
+    playerData = []
+
+    #return data of top 100 avg draft position player, NOT sorted/formatted
+    for data in json_dataPlayer:
+        tempDraft = data['AverageDraftPosition']
+        if tempDraft == None or int(tempDraft) > 100:
+            continue
+        arrResult = [data['Name'],data['AverageDraftPosition']]
+        #name = data['Name']
+        #averageDraftPos = data['AverageDraftPosition']
+        playerData.append(arrResult)
+
+    #sort by lowest -> highest average draft position
+    playerData.sort(key = lambda x: x[1])
+
+    ##write top 100 to excel sheet
+    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
+    range = f"A2:B160"
+    enterType = "USER_ENTERED" #other types are RAW & INPUT_VALUE_OPTION_UNSECIFIED
+    input_values = playerData
+
+    requesterG()
+
+    update_values(FANTASY_SHEET_ID, range, enterType, input_values)
+
+    return playerData
+
     ##08/08/2022 create oauth with goggle to WRITE data from sportsdata.io api
     #
 
@@ -132,6 +173,29 @@ def clear_credentials():
         del flask.session['credentials']
     return ('Credentials have been cleard.<br><br>' + print_index_table())
 
+@app.route('/sheet')
+def sheet():
+    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
+    range = "Sheet1!A1:B2"
+    creds = None
+
+    requesterG()
+
+    #return google sheet values from range
+    return get_values(FANTASY_SHEET_ID, range)
+
+@app.route('/write')
+def write():
+    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
+    range = "A2:B101"
+    enterType = "USER_ENTERED" #other types are RAW & INPUT_VALUE_OPTION_UNSECIFIED
+    input_values = [['A','B'],['C','D']]
+    creds = None
+
+    requesterG()
+
+    return update_values(FANTASY_SHEET_ID, range, enterType, input_values)
+
 def credentials_to_dict(credentials):
     return {'token': credentials.token,
             'refresh_token': credentials.refresh_token,
@@ -162,12 +226,8 @@ def print_index_table():
           '    API request</a> again, you should go back to the auth flow.' +
           '</td></tr></table>')
 
-@app.route('/sheet')
-def sheet():
-    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
-    range = "Sheet1!A1:B2"
-    creds = None
-
+#use before google API call to verify credentials
+def requesterG():
     if 'credentials' not in flask.session:
         return flask.redirect('authorize')
     
@@ -176,50 +236,8 @@ def sheet():
 
     drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
 
-    #files = drive.files().list().execute()
-
     #save creds back to session in case access token refreshed.
     flask.session['credentials'] = credentials_to_dict(credentials)
-
-    #return google sheet values from range
-    return get_values(FANTASY_SHEET_ID, range)
-
-@app.route('/write')
-def write():
-    FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
-    range = "A3:B4"
-    enterType = "USER_ENTERED"
-    input_values = [['A','B'],['C','D']]
-    creds = None
-
-    #authorize if credentials not in session
-    if 'credentials' not in flask.session:
-        return flask.redirect('authorization')
-
-    #load credentials from session
-    credentials = google.oauth2.credentials.Credentials(**flask.session['credentials'])
-
-    drive = googleapiclient.discovery.build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
-    
-    #save creds back to session
-    flask.session['credentials'] = credentials_to_dict(credentials)
-
-    return update_values(FANTASY_SHEET_ID, range, enterType, input_values)
-    
-    # if update.get('updatedCells') == None:
-    #     return '<p>Unsuccessful Update</p>'
-    # elif update == error:
-    #     return error
-    # else:
-    #     return update.get('updatedCells') + '<p>Successfully Updated</p>'
-
-if __name__ == '__main__':
-    # When running locally, disable OAuthlib's HTTPS verification.
-    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-
-    # Specify a hostname and port that are set as a valid redirect URI
-    # for your API project in the Google API Console.
-    app.run('localhost', 8080, debug=True)
 
 def get_values(spreadsheet_id, range_name):
     #load pre-authorized credentials from environment.
@@ -257,6 +275,12 @@ def update_values(spreadsheet_id, range_name, value_input_option, _values):
         print(f'An error occurred: {error}')
         return error
     
+if __name__ == '__main__':
+    # When running locally, disable OAuthlib's HTTPS verification.
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
+    # Specify a hostname and port that are set as a valid redirect URI
+    # for your API project in the Google API Console.
+    app.run('localhost', 8080, debug=True)
  
  
