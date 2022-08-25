@@ -1,3 +1,5 @@
+from http.client import responses
+from wsgiref import headers
 import flask
 import fantasy.requester as requester
 import requests
@@ -5,7 +7,7 @@ import os
 from dotenv import load_dotenv
 import fantasy.sheets as sheets
 from fantasy import app
-
+from flask_cors import CORS
 
 SPORTSDATA_KEY = os.getenv('SPORTSDATA_KEY')
 #google sheet api constants
@@ -17,18 +19,24 @@ API_SERVICE_NAME = 'drive'
 API_VERSION = 'v2'
 CLIENT_SECRETS_FILE = 'client_secret.json'
 
+CORS(app, origins=['http://frontend.example.com:3000'])
+
+headers = {
+        'Ocp-Apim-Subscription-Key': f'{SPORTSDATA_KEY}'
+        }
+playersListURL = 'https://api.sportsdata.io/v3/nfl/scores/json/Players'
+
+@app.after_request
+def add_response_header(response):
+    response.headers['Access-Control-Allow-Origin'] = 'http://frontend.example.com:3000'
+    return response
+
 @app.route("/")
-def hello_world():
-    return "<p>Hello, World!</p>"
+def index():
+    return open('fantasy/frontend/static/index.html')
 
 @app.route("/top100")
-def player():
-    headers = {
-        'Ocp-Apim-Subscription-Key': f'{SPORTSDATA_KEY}'
-    }
-
-    playersListURL = f'https://api.sportsdata.io/v3/nfl/scores/json/Players'
-    
+def players():
     #request to api
     requestPlayer = requests.get(playersListURL, headers = headers)
     json_dataPlayer = requestPlayer.json()
@@ -39,58 +47,61 @@ def player():
     for data in json_dataPlayer:
         tempDraft = data['AverageDraftPosition']
         if tempDraft == None or int(tempDraft) > 100:
-            continue
-        arrResult = [data['Name'],data['AverageDraftPosition']]
-        #name = data['Name']
-        #averageDraftPos = data['AverageDraftPosition']
+           continue
+        arrResult = [data['Name'],data['Position'],data['AverageDraftPosition']]
         playerData.append(arrResult)
 
     #sort by lowest -> highest average draft position
-    playerData.sort(key = lambda x: x[1])
-
-    return playerData
+    playerData.sort(key = lambda x: x[2])
+    top100 = playerData[0:100]
+    
+    return top100
 
 @app.route("/top100toSheet")
 def playerSheet():
-    headers = {
-        'Ocp-Apim-Subscription-Key': f'{SPORTSDATA_KEY}'
-    }
-
-    playersListURL = f'https://api.sportsdata.io/v3/nfl/scores/json/Players'
-    
-    #request to api
-    requestPlayer = requests.get(playersListURL, headers = headers)
-    json_dataPlayer = requestPlayer.json()
-    data = json_dataPlayer
-    playerData = []
-
-    #return data of top 100 avg draft position player, NOT sorted/formatted
-    for data in json_dataPlayer:
-        tempDraft = data['AverageDraftPosition']
-        if tempDraft == None or int(tempDraft) > 100:
-            continue
-        arrResult = [data['Name'],data['AverageDraftPosition']]
-        #name = data['Name']
-        #averageDraftPos = data['AverageDraftPosition']
-        playerData.append(arrResult)
-
-    #sort by lowest -> highest average draft position
-    playerData.sort(key = lambda x: x[1])
-
     ##write top 100 to excel sheet
     FANTASY_SHEET_ID = os.getenv('FANTASY_SHEET_ID')
-    range = f"A2:B160"
+    range = f"A2:C101"
     enterType = "USER_ENTERED" #other types are RAW & INPUT_VALUE_OPTION_UNSECIFIED
-    input_values = playerData
+    input_values = players()
 
     requester.requesterG()
 
     sheets.update_values(FANTASY_SHEET_ID, range, enterType, input_values)
 
-    return playerData
+    return input_values
 
     ##08/08/2022 create oauth with goggle to WRITE data from sportsdata.io api
-    #
+
+@app.route('/top10Sheet')
+def top10():
+    top100List = players()
+    top10rb = []
+    top10qb = []
+    top10te = []
+    top10wr = []
+    i = 0
+
+    for player in top100List:
+        if top100List[i][1] == 'RB':
+            if len(top10rb) == 10:
+                continue
+            top10rb.append(player)
+        elif top100List[i][1] == 'QB':
+            if len(top10qb) == 10:
+                continue
+            top10qb.append(player)
+        elif top100List[i][1] == 'TE':
+            if len(top10te) == 10:
+                continue
+            top10te.append(player)
+        elif top100List[i][1] == 'WR':
+            if len(top10wr) == 10:
+                continue
+            top10wr.append(player)
+
+    return top10rb+top10qb+top10te+top10wr
+
 
 @app.route('/authorize')
 def authorize():
