@@ -1,0 +1,22 @@
+<html>
+<header>
+    <title>Fantasy Football Data</title>
+</header>
+
+<body>
+    <div>This is basic fantasy data getting from backend test</div>
+    <div><span>Last Update:</span><span id="time-container"></span></div>
+    <button onclick=getUsers()>This gives a player list</button>
+    <div id="result-container"></div>
+</body>
+<script>
+    function getUsers(){
+        console.log("Get Players...");
+        fetch("http://backend.example.com:5000/top100",)
+            .then(res => res.json())
+            .then(console.log)
+    }
+    //console.log(getUsers())
+</script>
+<div>hello world</div>
+</html>
