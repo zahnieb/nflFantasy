@@ -1,9 +1,11 @@
+from email import header
+from wsgiref import headers
 from flask import Flask
 import os
 from dotenv import load_dotenv
-
     
 app = Flask(__name__)
+
 app.secret_key = os.getenv('FLASK_SECRET')
 
 import fantasy.views
