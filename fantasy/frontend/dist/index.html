@@ -4,42 +4,117 @@
 </header>
 
 <body>
-    <div>Press button of top lists</div>
+    <h2>Press button of top lists</h2>
     <div>
+        <p><strong>Get Top 100 Players lists</strong></p>
         <input type="button" value="Top 10 RB" onclick="top10RB()"> 
         
+        <div id="top10RB">
+            
+        </div>
+        <p><strong>Get Top 100 Players lists</strong></p>
         <input type="button" value="top 10 WR" onclick="top10WR()">
         
-        <input type="button" value="top 10 QB" onclick="top10QB()"> 
+        <div id="top10WR">
+
+        </div>
+        <p><strong>Get Top 100 Players lists</strong></p>
+        <input type="button" value="top 10 QB" onclick="top10QB()">
+        <div id="top10QB">
+
+        </div>
         
     </div>
     <div>
         <p>
-        Get Top 100 Players lists
+        <strong>Get Top 100 Players lists</strong>
         </p>
         <p>
         <button onclick="getTop100Players()">
             Top 100 Players
         </button>
-        </p>
+        </p><div id="top100">
+
+        </div>
+        <p></p>
     </div>
 <script src="/static.c6f4a172.js"></script></body>
 <script>function top10RB() {
     console.log("Get top10 RB");
-    fetch("http://backend.example.com:5000/top10RB").then((res)=>res.json()).then(console.log);
+    fetch("http://backend.example.com:5000/top10RB").then(function(response) {
+        return response.json();
+    }).then(function(data) {
+        console.log(data);
+        appendDataRB(data);
+    }).catch(function(err) {
+        console.log("failed to print players");
+    });
 }
 function top10WR() {
     console.log("Get top10 WR");
-    fetch("http://backend.example.com:5000/top10WR").then((res)=>res.json()).then(console.log);
+    fetch("http://backend.example.com:5000/top10WR").then(function(response) {
+        return response.json();
+    }).then(function(data) {
+        console.log(data);
+        appendDataWR(data);
+    }).catch(function(err) {
+        console.log("failed to print players");
+    });
 }
 function top10QB() {
     console.log("Get top10 WR");
-    fetch("http://backend.example.com:5000/top10QB").then((res)=>res.json()).then(console.log);
+    fetch("http://backend.example.com:5000/top10QB").then(function(response) {
+        return response.json();
+    }).then(function(data) {
+        console.log(data);
+        appendDataQB(data);
+    }).catch(function(err) {
+        console.log("failed to print players");
+    });
 }
 function getTop100Players() {
     console.log("Get Players...");
-    fetch("http://backend.example.com:5000/top100").then((res)=>res.json()).then(console.log);
-} //console.log(getUsers())
+    fetch("http://backend.example.com:5000/top100").then(function(response) {
+        return response.json();
+    }).then(function(data) {
+        console.log(data);
+        appendData100(data);
+    }).catch(function(err) {
+        console.log("failed to print players");
+    });
+}
+function appendDataRB(data) {
+    var mainContainer = document.getElementById("top10RB");
+    for(var i = 0; i < data.length; i++){
+        var div = document.createElement("div");
+        div.innerHTML = data[i];
+        mainContainer.appendChild(div);
+    }
+}
+function appendDataWR(data) {
+    var mainContainer = document.getElementById("top10WR");
+    for(var i = 0; i < data.length; i++){
+        var div = document.createElement("div");
+        div.innerHTML = data[i];
+        mainContainer.appendChild(div);
+    }
+}
+function appendDataQB(data) {
+    var mainContainer = document.getElementById("top10QB");
+    for(var i = 0; i < data.length; i++){
+        var div = document.createElement("div");
+        div.innerHTML = data[i];
+        mainContainer.appendChild(div);
+    }
+}
+function appendData100(data) {
+    var mainContainer = document.getElementById("top100");
+    for(var i = 0; i < data.length; i++){
+        var div = document.createElement("div");
+        div.innerHTML = data[i];
+        mainContainer.appendChild(div);
+    }
+}
 
 </script>
 </html>
