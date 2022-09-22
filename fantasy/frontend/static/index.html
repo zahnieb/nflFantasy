@@ -4,13 +4,46 @@
 </header>
 
 <body>
-    <div>This is basic fantasy data getting from backend test</div>
-    <div><span>Last Update:</span><span id="time-container"></span></div>
-    <button onclick=getUsers()>This gives a player list</button>
-    <div id="result-container"></div>
+    <div>Press button of top lists</div>
+    <div>
+        <input type="button" value="Top 10 RB" onclick="top10RB()"> 
+        </input>
+        <input type="button" value="top 10 WR" onclick="top10WR()">
+        </input>
+        <input type="button" value="top 10 QB" onclick="top10QB()"> 
+        </input>
+    </div>
+    <div>
+        <p>
+        Get Top 100 Players lists
+        </p>
+        <p>
+        <button onclick="getTop100Players()">
+            Top 100 Players
+        </button>
+        </p>
+    </div>
 </body>
 <script>
-    function getUsers(){
+    function top10RB(){
+        console.log("Get top10 RB");
+        fetch("http://backend.example.com:5000/top10RB",)
+            .then(res => res.json())
+            .then(console.log)
+    }
+    function top10WR(){
+        console.log("Get top10 WR");
+        fetch("http://backend.example.com:5000/top10WR",)
+            .then(res => res.json())
+            .then(console.log)
+    }
+    function top10QB(){
+        console.log("Get top10 WR");
+        fetch("http://backend.example.com:5000/top10QB",)
+            .then(res => res.json())
+            .then(console.log)
+    }
+    function getTop100Players(){
         console.log("Get Players...");
         fetch("http://backend.example.com:5000/top100",)
             .then(res => res.json())
@@ -18,5 +51,7 @@
     }
     //console.log(getUsers())
 </script>
-<div>hello world</div>
 </html>
+
+
+<!--106247925-->
