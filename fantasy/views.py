@@ -73,34 +73,21 @@ def playerSheet():
 
     ##08/08/2022 create oauth with goggle to WRITE data from sportsdata.io api
 
-@app.route('/top10Sheet')
-def top10():
-    top100List = players()
-    top10rb = []
-    top10qb = []
-    top10te = []
-    top10wr = []
-    i = 0
+@app.route('/top10RB')
+def top10_rb():
+    
+    return position("RB")
 
-    for player in top100List:
-        if top100List[i][1] == 'RB':
-            if len(top10rb) == 10:
-                continue
-            top10rb.append(player)
-        elif top100List[i][1] == 'QB':
-            if len(top10qb) == 10:
-                continue
-            top10qb.append(player)
-        elif top100List[i][1] == 'TE':
-            if len(top10te) == 10:
-                continue
-            top10te.append(player)
-        elif top100List[i][1] == 'WR':
-            if len(top10wr) == 10:
-                continue
-            top10wr.append(player)
+@app.route('/top10WR')
+def top10_wr():
+    
+    return position("WR")
 
-    return top10rb+top10qb+top10te+top10wr
+@app.route('/top10QB')
+def top10_qb():
+    
+    return position("QB")
+
 
 
 @app.route('/authorize')
@@ -189,3 +176,18 @@ def write():
 
     return sheets.update_values(FANTASY_SHEET_ID, range, enterType, input_values)
 
+def position(pos):
+    top100List = players()
+    posList = []
+    i = 0
+    #get top10 based on position
+    for player in top100List:
+        if top100List[i][1] == pos:
+            posList.append(player)
+            i+=1
+            if len(posList) == 10:
+                break
+        else:
+            i+=1
+            continue
+    return posList

@@ -6,3 +6,6 @@
 
 #pycache 
 __pycache__/
+
+#parcel-cache
+*.parcel-cache/
